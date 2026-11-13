@@ -3,5 +3,15 @@
   "python.analysis.extraPaths": [
     "${workspaceFolder}",
     "${workspaceFolder}/venv/lib/python3.14/site-packages"
-  ]
+  ],
+  "basedpyright.analysis.diagnosticSeverityOverrides": {
+    "reportUnknownMemberType": "none",
+    "reportUnknownVariableType": "none",
+    "reportUnknownArgumentType": "none",
+    "reportUnknownParameterType": "none",
+    "reportMissingParameterType": "none",
+    "reportAny": "none",
+    "reportUnusedCallResult": "none",
+    "reportImplicitStringConcatenation": "none"
+  }
 }

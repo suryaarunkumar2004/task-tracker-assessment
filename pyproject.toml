@@ -1,0 +1,21 @@
+[tool.basedpyright]
+venv = "venv"
+venvPath = "."
+include = ["."]
+exclude = ["**/venv", "**/.venv", "**/__pycache__"]
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportMissingParameterType = false
+reportAny = false
+reportUnusedCallResult = false
+reportImplicitStringConcatenation = false
+
+[tool.pyrefly]
+venv = "venv"
+venv_path = "."
+search_paths = [
+  ".",
+  "venv/lib/python3.14/site-packages"
+]
