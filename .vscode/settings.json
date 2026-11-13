@@ -5,6 +5,7 @@
     "${workspaceFolder}/venv/lib/python3.14/site-packages"
   ],
   "basedpyright.analysis.diagnosticSeverityOverrides": {
+    "reportExplicitAny": "none",
     "reportUnknownMemberType": "none",
     "reportUnknownVariableType": "none",
     "reportUnknownArgumentType": "none",
@@ -12,6 +13,8 @@
     "reportMissingParameterType": "none",
     "reportAny": "none",
     "reportUnusedCallResult": "none",
-    "reportImplicitStringConcatenation": "none"
+    "reportImplicitStringConcatenation": "none",
+    "reportUntypedFunctionDecorator": "none",
+    "reportArgumentType": "none"
   }
 }

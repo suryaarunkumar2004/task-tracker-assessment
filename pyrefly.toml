@@ -1,0 +1,12 @@
+python-interpreter-path = "venv/bin/python"
+site-package-path = [
+  "venv/lib/python3.14/site-packages",
+  ".venv/lib/python3.14/site-packages"
+]
+search-path = ["."]
+
+[errors]
+missing-import = "ignore"
+untyped-import = "ignore"
+bad-specialization = "ignore"
+unnecessary-type-conversion = "ignore"

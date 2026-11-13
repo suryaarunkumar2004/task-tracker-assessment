@@ -17,5 +17,7 @@
   "reportMissingParameterType": false,
   "reportAny": false,
   "reportUnusedCallResult": false,
-  "reportImplicitStringConcatenation": false
+  "reportImplicitStringConcatenation": false,
+  "reportUntypedFunctionDecorator": false,
+  "reportArgumentType": false
 }

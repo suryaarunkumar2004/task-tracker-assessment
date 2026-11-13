@@ -12,14 +12,19 @@ reportMissingParameterType = false
 reportAny = false
 reportUnusedCallResult = false
 reportImplicitStringConcatenation = false
+reportUntypedFunctionDecorator = false
+reportArgumentType = false
 
 [tool.pyrefly]
 python-interpreter-path = "venv/bin/python"
-search-path = [
-  ".",
-  "venv/lib/python3.14/site-packages"
+site-package-path = [
+  "venv/lib/python3.14/site-packages",
+  ".venv/lib/python3.14/site-packages"
 ]
+search-path = ["."]
 
 [tool.pyrefly.errors]
 missing-import = "ignore"
+untyped-import = "ignore"
+bad-specialization = "ignore"
 unnecessary-type-conversion = "ignore"

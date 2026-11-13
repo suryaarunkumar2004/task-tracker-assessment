@@ -15,12 +15,13 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Callable
+from typing import Callable, TypeVar, cast
 
-from authlib.integrations.flask_client import OAuth
-from authlib.integrations.base_client.errors import OAuthError
+from authlib.integrations.flask_client import OAuth  # type: ignore[import-untyped]
+from authlib.integrations.base_client.errors import OAuthError  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for, Response
+from flask.typing import ResponseReturnValue
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 _ = load_dotenv()
@@ -157,9 +158,12 @@ def current_user() -> sqlite3.Row | None:
     return row
 
 
-def login_required(view: Callable[..., object]) -> Callable[..., object]:
+RouteFunc = TypeVar("RouteFunc", bound=Callable[..., ResponseReturnValue])
+
+
+def login_required(view: RouteFunc) -> RouteFunc:
     @wraps(view)
-    def wrapped(*args: object, **kwargs: object) -> object:
+    def wrapped(*args: object, **kwargs: object) -> ResponseReturnValue:
         user = current_user()
         if user is None:
             session.clear()
@@ -169,7 +173,7 @@ def login_required(view: Callable[..., object]) -> Callable[..., object]:
         g.user = user
         return view(*args, **kwargs)
 
-    return wrapped
+    return cast(RouteFunc, wrapped)
 
 
 def task_to_dict(row: sqlite3.Row | None) -> dict[str, object]:
@@ -254,7 +258,7 @@ def fetch_task(task_id: int, include_deleted: bool = False) -> sqlite3.Row | Non
 # ---------- Pages and authentication ----------
 @app.route("/")
 @login_required
-def index() -> object:
+def index() -> ResponseReturnValue:
     user = getattr(g, "user", None) or current_user()
     return render_template(
         "index.html",
@@ -268,7 +272,7 @@ def index() -> object:
 
 
 @app.route("/login")
-def login() -> object:
+def login() -> ResponseReturnValue:
     if current_user():
         return redirect(url_for("index"))
     return render_template(
@@ -280,7 +284,7 @@ def login() -> object:
 
 
 @app.route("/auth/google")
-def auth_google() -> object:
+def auth_google() -> ResponseReturnValue:
     if not is_google_configured():
         # Helpful guidance for evaluators running without Google Cloud credentials
         return redirect(url_for("login", error="google_not_configured"))
@@ -294,7 +298,7 @@ def auth_google() -> object:
 
 
 @app.route("/auth/callback")
-def auth_callback() -> object:
+def auth_callback() -> ResponseReturnValue:
     google_client = oauth.create_client("google")
     if not google_client:
         return redirect(url_for("login", error="1"))
@@ -332,7 +336,7 @@ def auth_callback() -> object:
 
 
 @app.route("/auth/demo", methods=["POST", "GET"])
-def auth_demo() -> object:
+def auth_demo() -> ResponseReturnValue:
     """Demo login endpoint for quick local testing and evaluation."""
     account_key: str = str(request.values.get("account", "alex"))
     demo_user = DEMO_ACCOUNTS.get(account_key, DEMO_ACCOUNTS["alex"])
@@ -356,7 +360,7 @@ def auth_demo() -> object:
 
 
 @app.route("/logout", methods=["POST"])
-def logout() -> object:
+def logout() -> ResponseReturnValue:
     session.clear()
     return redirect(url_for("login"))
 
@@ -364,7 +368,7 @@ def logout() -> object:
 # ---------- Task API ----------
 @app.get("/api/tasks")
 @login_required
-def list_tasks() -> object:
+def list_tasks() -> ResponseReturnValue:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -377,7 +381,7 @@ def list_tasks() -> object:
 
 @app.post("/api/tasks")
 @login_required
-def create_task() -> object:
+def create_task() -> ResponseReturnValue:
     data = json_body()
     if data is None:
         return jsonify(error="Request must be a JSON object."), 415
@@ -414,7 +418,7 @@ def create_task() -> object:
 
 @app.patch("/api/tasks/<int:task_id>")
 @login_required
-def update_task(task_id: int) -> object:
+def update_task(task_id: int) -> ResponseReturnValue:
     data = json_body()
     if data is None:
         return jsonify(error="Request must be a JSON object."), 415
@@ -444,7 +448,7 @@ def update_task(task_id: int) -> object:
 
 @app.delete("/api/tasks/<int:task_id>")
 @login_required
-def delete_task(task_id: int) -> object:
+def delete_task(task_id: int) -> ResponseReturnValue:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -461,7 +465,7 @@ def delete_task(task_id: int) -> object:
 
 @app.post("/api/tasks/<int:task_id>/restore")
 @login_required
-def restore_task(task_id: int) -> object:
+def restore_task(task_id: int) -> ResponseReturnValue:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -478,7 +482,7 @@ def restore_task(task_id: int) -> object:
 
 @app.post("/api/tasks/clear-completed")
 @login_required
-def clear_completed() -> object:
+def clear_completed() -> ResponseReturnValue:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -503,7 +507,7 @@ def clear_completed() -> object:
 
 @app.post("/api/tasks/restore-multiple")
 @login_required
-def restore_multiple() -> object:
+def restore_multiple() -> ResponseReturnValue:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -528,7 +532,7 @@ def restore_multiple() -> object:
 
 @app.get("/api/tasks/export")
 @login_required
-def export_tasks() -> object:
+def export_tasks() -> ResponseReturnValue:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
