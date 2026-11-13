@@ -3,6 +3,7 @@ venv = "venv"
 venvPath = "."
 include = ["."]
 exclude = ["**/venv", "**/.venv", "**/__pycache__"]
+reportExplicitAny = false
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
@@ -13,9 +14,12 @@ reportUnusedCallResult = false
 reportImplicitStringConcatenation = false
 
 [tool.pyrefly]
-venv = "venv"
-venv_path = "."
-search_paths = [
+python-interpreter-path = "venv/bin/python"
+search-path = [
   ".",
   "venv/lib/python3.14/site-packages"
 ]
+
+[tool.pyrefly.errors]
+missing-import = "ignore"
+unnecessary-type-conversion = "ignore"

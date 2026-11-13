@@ -15,7 +15,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Any, Callable
+from typing import Callable
 
 from authlib.integrations.flask_client import OAuth
 from authlib.integrations.base_client.errors import OAuthError
@@ -67,7 +67,7 @@ _ = oauth.register(
 )
 
 # Demo accounts available for zero-config local evaluation and testing multi-user isolation
-DEMO_ACCOUNTS: dict[str, dict[str, Any]] = {
+DEMO_ACCOUNTS: dict[str, dict[str, object]] = {
     "alex": {
         "google_id": "demo_google_1001",
         "email": "alex.johnson@example.com",
@@ -95,7 +95,7 @@ def get_db() -> sqlite3.Connection:
 
 @app.teardown_appcontext
 def close_db(_exc: BaseException | None = None) -> None:
-    db: Any = g.pop("db", None)
+    db: sqlite3.Connection | None = g.pop("db", None)
     if db is not None:
         db.close()
 
@@ -157,9 +157,9 @@ def current_user() -> sqlite3.Row | None:
     return row
 
 
-def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
+def login_required(view: Callable[..., object]) -> Callable[..., object]:
     @wraps(view)
-    def wrapped(*args: Any, **kwargs: Any) -> Any:
+    def wrapped(*args: object, **kwargs: object) -> object:
         user = current_user()
         if user is None:
             session.clear()
@@ -172,7 +172,7 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
-def task_to_dict(row: sqlite3.Row | None) -> dict[str, Any]:
+def task_to_dict(row: sqlite3.Row | None) -> dict[str, object]:
     if row is None:
         return {}
     keys = row.keys() if hasattr(row, "keys") else ()
@@ -188,7 +188,7 @@ def task_to_dict(row: sqlite3.Row | None) -> dict[str, Any]:
     }
 
 
-def json_body() -> dict[str, Any] | None:
+def json_body() -> dict[str, object] | None:
     """Return the JSON object in the request, or None if it is missing or not an object."""
     if not request.is_json:
         return None
@@ -196,17 +196,17 @@ def json_body() -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def text_value(data: dict[str, Any], key: str) -> str:
+def text_value(data: dict[str, object], key: str) -> str:
     value = data.get(key)
     return "" if value is None else str(value).strip()
 
 
-def validate_fields(data: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+def validate_fields(data: dict[str, object]) -> tuple[dict[str, object] | None, str | None]:
     """Validate whichever task fields are present in `data`.
 
     Returns (fields, error). Only fields that were sent are returned.
     """
-    fields: dict[str, Any] = {}
+    fields: dict[str, object] = {}
     if "title" in data:
         title = text_value(data, "title")
         if not title:
@@ -254,7 +254,7 @@ def fetch_task(task_id: int, include_deleted: bool = False) -> sqlite3.Row | Non
 # ---------- Pages and authentication ----------
 @app.route("/")
 @login_required
-def index() -> Any:
+def index() -> object:
     user = getattr(g, "user", None) or current_user()
     return render_template(
         "index.html",
@@ -268,7 +268,7 @@ def index() -> Any:
 
 
 @app.route("/login")
-def login() -> Any:
+def login() -> object:
     if current_user():
         return redirect(url_for("index"))
     return render_template(
@@ -280,12 +280,12 @@ def login() -> Any:
 
 
 @app.route("/auth/google")
-def auth_google() -> Any:
+def auth_google() -> object:
     if not is_google_configured():
         # Helpful guidance for evaluators running without Google Cloud credentials
         return redirect(url_for("login", error="google_not_configured"))
     try:
-        google_client: Any = oauth.create_client("google")
+        google_client = oauth.create_client("google")
         if not google_client:
             return redirect(url_for("login", error="oauth_error"))
         return google_client.authorize_redirect(url_for("auth_callback", _external=True))
@@ -294,23 +294,25 @@ def auth_google() -> Any:
 
 
 @app.route("/auth/callback")
-def auth_callback() -> Any:
-    google_client: Any = oauth.create_client("google")
+def auth_callback() -> object:
+    google_client = oauth.create_client("google")
     if not google_client:
         return redirect(url_for("login", error="1"))
     try:
-        token: dict[str, Any] = google_client.authorize_access_token()
+        raw_token = google_client.authorize_access_token()
     except OAuthError:
         return redirect(url_for("login", error="1"))
 
-    info: dict[str, Any] = token.get("userinfo") or {}
-    google_id: str | None = info.get("sub")
-    email: str | None = info.get("email")
+    token = raw_token if isinstance(raw_token, dict) else {}
+    raw_userinfo = token.get("userinfo")
+    info = raw_userinfo if isinstance(raw_userinfo, dict) else {}
+    google_id = info.get("sub")
+    email = info.get("email")
     if not google_id or not email:
         return redirect(url_for("login", error="1"))
 
     raw_name = info.get("name")
-    name: str = str(raw_name) if raw_name else email.split("@")[0]
+    name: str = str(raw_name) if raw_name else str(email).split("@")[0]
     db: sqlite3.Connection = get_db()
     _ = db.execute(
         """
@@ -318,10 +320,10 @@ def auth_callback() -> Any:
         ON CONFLICT(google_id) DO UPDATE SET email = excluded.email,
             name = excluded.name, picture = excluded.picture
         """,
-        (google_id, email, name, info.get("picture")),
+        (str(google_id), str(email), name, info.get("picture")),
     )
     db.commit()
-    user: sqlite3.Row | None = db.execute("SELECT id FROM users WHERE google_id = ?", (google_id,)).fetchone()
+    user: sqlite3.Row | None = db.execute("SELECT id FROM users WHERE google_id = ?", (str(google_id),)).fetchone()
     if user is None:
         return redirect(url_for("login", error="1"))
     session.clear()
@@ -330,7 +332,7 @@ def auth_callback() -> Any:
 
 
 @app.route("/auth/demo", methods=["POST", "GET"])
-def auth_demo() -> Any:
+def auth_demo() -> object:
     """Demo login endpoint for quick local testing and evaluation."""
     account_key: str = str(request.values.get("account", "alex"))
     demo_user = DEMO_ACCOUNTS.get(account_key, DEMO_ACCOUNTS["alex"])
@@ -354,7 +356,7 @@ def auth_demo() -> Any:
 
 
 @app.route("/logout", methods=["POST"])
-def logout() -> Any:
+def logout() -> object:
     session.clear()
     return redirect(url_for("login"))
 
@@ -362,7 +364,7 @@ def logout() -> Any:
 # ---------- Task API ----------
 @app.get("/api/tasks")
 @login_required
-def list_tasks() -> Any:
+def list_tasks() -> object:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -375,7 +377,7 @@ def list_tasks() -> Any:
 
 @app.post("/api/tasks")
 @login_required
-def create_task() -> Any:
+def create_task() -> object:
     data = json_body()
     if data is None:
         return jsonify(error="Request must be a JSON object."), 415
@@ -406,13 +408,13 @@ def create_task() -> Any:
         ),
     )
     db.commit()
-    new_task = fetch_task(int(cur.lastrowid)) if cur.lastrowid is not None else None
+    new_task = fetch_task(cur.lastrowid) if cur.lastrowid is not None else None
     return jsonify(task=task_to_dict(new_task)), 201
 
 
 @app.patch("/api/tasks/<int:task_id>")
 @login_required
-def update_task(task_id: int) -> Any:
+def update_task(task_id: int) -> object:
     data = json_body()
     if data is None:
         return jsonify(error="Request must be a JSON object."), 415
@@ -430,7 +432,7 @@ def update_task(task_id: int) -> Any:
     if user is None:
         return jsonify(error="Unauthorized"), 401
 
-    assignments = ", ".join(f"{str(column)} = ?" for column in fields)
+    assignments = ", ".join(f"{column} = ?" for column in fields)
     db: sqlite3.Connection = get_db()
     _ = db.execute(
         f"UPDATE tasks SET {assignments}, updated_at = ? WHERE id = ? AND user_id = ?",
@@ -442,7 +444,7 @@ def update_task(task_id: int) -> Any:
 
 @app.delete("/api/tasks/<int:task_id>")
 @login_required
-def delete_task(task_id: int) -> Any:
+def delete_task(task_id: int) -> object:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -459,7 +461,7 @@ def delete_task(task_id: int) -> Any:
 
 @app.post("/api/tasks/<int:task_id>/restore")
 @login_required
-def restore_task(task_id: int) -> Any:
+def restore_task(task_id: int) -> object:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -476,7 +478,7 @@ def restore_task(task_id: int) -> Any:
 
 @app.post("/api/tasks/clear-completed")
 @login_required
-def clear_completed() -> Any:
+def clear_completed() -> object:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -501,7 +503,7 @@ def clear_completed() -> Any:
 
 @app.post("/api/tasks/restore-multiple")
 @login_required
-def restore_multiple() -> Any:
+def restore_multiple() -> object:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
@@ -526,7 +528,7 @@ def restore_multiple() -> Any:
 
 @app.get("/api/tasks/export")
 @login_required
-def export_tasks() -> Any:
+def export_tasks() -> object:
     user = getattr(g, "user", None) or current_user()
     if user is None:
         return jsonify(error="Unauthorized"), 401
