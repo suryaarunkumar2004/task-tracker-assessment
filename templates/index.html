@@ -211,10 +211,16 @@
   <!-- Notification & Undo Toast Container -->
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
-  <script>
-    window.APP_STATUSES = {{ statuses|tojson }};
-    window.APP_PRIORITIES = {{ priorities|tojson }};
-    window.APP_LIMITS = { title: {{ title_max }}, description: {{ description_max }} };
+  <!-- Server configuration passed via structured JSON -->
+  <script id="app-config" type="application/json">
+    {
+      "statuses": {{ statuses|tojson }},
+      "priorities": {{ priorities|tojson }},
+      "limits": {
+        "title": {{ title_max }},
+        "description": {{ description_max }}
+      }
+    }
   </script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

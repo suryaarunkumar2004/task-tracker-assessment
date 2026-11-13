@@ -1,9 +1,18 @@
 (function () {
   "use strict";
 
-  var STATUSES = window.APP_STATUSES || ["Planned", "In Progress", "Complete"];
-  var PRIORITIES = window.APP_PRIORITIES || ["Low", "Medium", "High"];
-  var LIMITS = window.APP_LIMITS || { title: 100, description: 500 };
+  var configEl = document.getElementById("app-config");
+  var appConfig = {};
+  if (configEl && configEl.textContent) {
+    try {
+      appConfig = JSON.parse(configEl.textContent);
+    } catch (_err) {
+      appConfig = {};
+    }
+  }
+  var STATUSES = (appConfig && appConfig.statuses) || window.APP_STATUSES || ["Planned", "In Progress", "Complete"];
+  var PRIORITIES = (appConfig && appConfig.priorities) || window.APP_PRIORITIES || ["Low", "Medium", "High"];
+  var LIMITS = (appConfig && appConfig.limits) || window.APP_LIMITS || { title: 100, description: 500 };
   var UNDO_MS = 10000;
 
   var tasks = [];

@@ -33,17 +33,13 @@ Beyond the baseline requirements, this implementation includes practical enhance
 ## 1. How to Access and Use the Application
 
 1. **Accessing the App:** Open the live deployment URL or navigate locally to `http://localhost:5000`.
-2. **Signing In:**
-   - Click **Sign in with Google** to authenticate via your Google Account.
-   - For rapid local evaluation without configuring Google Cloud credentials, click **Alex Johnson** or **Taylor Morgan** under *Quick Evaluator Sign-In*.
-3. **Adding a Task:**
-4. **Authentication Options:**
+2. **Authentication Options:**
    - **Google Authentication:** Sign in with one click via Google OAuth 2.0.
    - **Email & Password Sign Up:** Create an account with name, email, password, and optional Remember Me.
    - **Email & Password Sign In:** Log in securely with existing credentials and optional Remember Me (30-day persistent session).
    - **Forgot Password & OTP Reset:** Enter your registered email to receive a 6-digit one-time passcode (OTP) valid for 10 minutes, enter the OTP, and set a new password.
    - **Quick Evaluator Sign-In:** One-click demo sign-in (*Alex Johnson* or *Taylor Morgan*) for instant local evaluation without setup.
-5. **Adding a Task:**
+3. **Adding a Task:**
    - Enter a **Title** (required, max 100 characters).
    - Optionally enter a **Description** (max 500 characters).
    - Select a **Priority** (*Low*, *Medium*, or *High*; defaults to *Medium*).
@@ -97,7 +93,7 @@ Beyond the baseline requirements, this implementation includes practical enhance
 Because the initial assessment specification defined core functional objectives without prescribing low-level details, the following engineering decisions and assumptions were made:
 
 | Gap / Ambiguity | Assumption & Decision | Technical Rationale |
-|---|---|---|
+| --- | --- | --- |
 | **Whose tasks does a user see?** | Tasks are strictly private to each authenticated user account. | Ensures multi-tenant privacy and data isolation; users cannot read or modify tasks created by others. |
 | **Required task fields & limits?** | Title is required (max 100 chars); description is optional (max 500 chars). | Keeps task entry rapid while enforcing database sanity and preventing UI layout breakage. |
 | **Initial task state?** | All newly created tasks start in **Planned** state. | Natural lifecycle for new work items before execution begins. |
@@ -134,16 +130,19 @@ Because the initial assessment specification defined core functional objectives 
 ## 6. Setup and Execution Instructions
 
 ### Prerequisites
+
 - Python 3.10 or newer
 - Git
 
 ### Step 1: Clone the Repository
+
 ```bash
 git clone <your-repository-url>
 cd task-tracker
 ```
 
 ### Step 2: Set Up Python Virtual Environment
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate       # On Windows: venv\Scripts\activate
@@ -151,11 +150,15 @@ pip install -r requirements.txt
 ```
 
 ### Step 3: Configure Environment Variables
+
 A ready-to-run `.env` file is generated automatically. To inspect or customize it:
+
 ```bash
 cp .env.example .env
 ```
+
 Default configuration parameters:
+
 ```env
 SECRET_KEY=2a2497f736e4f92261ef0571390e27f4dd0c8d157c48c7fb437b349cdc569694
 APP_ENV=development
@@ -165,10 +168,13 @@ DATABASE_PATH=tasks.db
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 ```
+
 *(Note: If `GOOGLE_CLIENT_ID` is left empty, the application automatically uses the Quick Evaluator Sign-In mode for immediate local evaluation.)*
 
 ### Step 4: (Optional) Configuring Google Cloud OAuth Credentials
+
 If you want to test live Google authentication:
+
 1. Navigate to the [Google Cloud Console](https://console.cloud.google.com/).
 2. Create a project and configure the **OAuth consent screen** (User Type: External).
 3. Under **Credentials**, create an **OAuth 2.0 Client ID** (Application type: *Web application*).
@@ -178,11 +184,14 @@ If you want to test live Google authentication:
 5. Copy the **Client ID** and **Client Secret** into your `.env` file.
 
 ### Step 5: Run the Application
+
 ```bash
 python app.py
 ```
+
 Open your browser and navigate to:
-```
+
+```text
 http://localhost:5000
 ```
 
@@ -191,6 +200,7 @@ http://localhost:5000
 ## 7. Running Automated Tests
 
 A comprehensive automated test suite of 13 unit and integration tests is included in `tests/test_app.py`, verifying:
+
 - Email/password signup, duplicate checks, and password validation
 - Email login and "Remember Me" persistent session handling
 - Forgot password 6-digit OTP generation, expiration, and password reset flow
@@ -203,10 +213,12 @@ A comprehensive automated test suite of 13 unit and integration tests is include
 - CSV and JSON task export endpoints
 
 To run the test suite:
+
 ```bash
 ./venv/bin/python -m unittest discover tests -v
 ```
-*(All tests use an isolated in-memory/temporary SQLite database and execute in ~1 second with zero external dependencies.)*
+
+Note: All tests use an isolated in-memory/temporary SQLite database and execute in ~1 second with zero external dependencies.
 
 ---
 
@@ -215,22 +227,26 @@ To run the test suite:
 As specified in the assessment requirements (Page 2), this section details the AI tools utilized, methodology, prompts, and manual engineering refinements applied.
 
 ### 8.1 Which AI Tools Were Used
+
 - **Google Antigravity Agentic Assistant (powered by Gemini 3.8 Flash High)**
 - Integrated terminal, file editing, and testing capabilities.
 
 ### 8.2 How AI Was Used
+
 1. **Requirements & Gap Analysis:** Used the model to review the assessment PDF, identify unstated edge cases (e.g. CSRF protection, multi-tenant isolation, evaluator onboarding without cloud credentials), and draft architectural assumptions.
 2. **Schema & API Scaffolding:** Synthesized the SQLite table schema, index definitions, and RESTful route handlers in Flask with JSON payload validation.
 3. **Frontend Component Authoring:** Generated vanilla JavaScript state management logic, the HTML5 drag-and-drop Kanban board layout, and CSS variables for accessible design.
 4. **Test Suite Generation:** Scaffolded unit and integration tests using Python's standard `unittest` framework.
 
 ### 8.3 Example Prompts Used
+
 - *"Analyze this assessment PDF. Identify missing requirements, ambiguities, and usability improvements for a task management app with states Planned, In Progress, Complete."*
 - *"Implement an interactive Kanban board in vanilla JavaScript and CSS that allows dragging cards between Planned, In Progress, and Complete columns, persisting status via PATCH /api/tasks/:id."*
 - *"Create a test suite in unittest verifying that User A cannot read, update, or delete tasks belonging to User B."*
 - *"Add a zero-configuration demo login fallback so reviewers can test the application without creating a Google Cloud OAuth project."*
 
 ### 8.4 What AI-Generated Code Was Modified or Corrected Manually
+
 1. **OAuth Error Recovery & Network Resilience:**
    - *Initial AI output:* Used Authlib's standard redirect without inspecting credentials or catching connection errors, resulting in an unhandled 500 error if credentials were blank.
    - *Manual correction:* Added `is_google_configured()` validation and graceful redirects to `/login?error=google_not_configured`, directing users to the Quick Evaluator Sign-In.
@@ -249,7 +265,7 @@ As specified in the assessment requirements (Page 2), this section details the A
 ## 9. Evaluation Criteria Alignment
 
 | Evaluation Area | Demonstrated Capabilities & Deliverables |
-|---|---|
+| --- | --- |
 | **Requirement Understanding** | Mapped all functional states (*Planned*, *In Progress*, *Complete*); identified gaps in data isolation, deletion recovery, and input sanitization; documented decisions in a clear assumptions matrix. |
 | **AI Tool Usage** | Leveraged AI responsibly for scaffolding, test generation, and UI ideation while actively auditing, hardening, and testing all generated logic. |
 | **Application Functionality** | 100% compliance with functional requirements: Google authentication, task creation, viewing, and state updates, plus CSV/JSON export and undo safety net. |
