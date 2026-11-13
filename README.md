@@ -8,8 +8,8 @@ This application allows users to securely sign in, create tasks, view their task
 
 ## Submission Links
 
-- **Source Code Repository:** `[Add your GitHub repository URL here]`
-- **Live Application URL:** `[Add your deployed live URL here, e.g., https://task-tracker-demo.onrender.com]`
+- **Source Code Repository:** <https://github.com/suryaarunkumar2004/task-tracker-assessment>
+- **Live Application URL:** `[Add your deployed live URL here if you host it on Render]`
 - **Technology Stack:** Python 3.10+ (Flask), SQLite, Vanilla HTML5, CSS3, JavaScript (ES6+), RESTful JSON API.
 
 ---
