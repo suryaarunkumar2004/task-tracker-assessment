@@ -14,11 +14,11 @@ os.environ["APP_ENV"] = "testing"
 
 
 class TaskTrackerTestCase(unittest.TestCase):
-    db_fd: int = -1
-    db_path: str = ""
-    app_module: Any = None
-    app: Flask = None  # type: ignore[assignment]
-    client: FlaskClient = None  # type: ignore[assignment]
+    db_fd: int
+    db_path: str
+    app_module: Any
+    app: Flask
+    client: FlaskClient
 
     def setUp(self) -> None:
         self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
