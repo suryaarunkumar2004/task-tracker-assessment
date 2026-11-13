@@ -10,7 +10,6 @@ Core requirements:
 import csv
 import io
 import os
-import secrets
 import sqlite3
 from datetime import datetime, timezone
 from functools import wraps
@@ -93,7 +92,7 @@ def get_db():
 
 
 @app.teardown_appcontext
-def close_db(_exc):
+def close_db(_exc=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
@@ -101,42 +100,44 @@ def close_db(_exc):
 
 def init_db():
     db = sqlite3.connect(DATABASE_PATH)
-    db.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            google_id  TEXT NOT NULL UNIQUE,
-            email      TEXT NOT NULL,
-            name       TEXT NOT NULL,
-            picture    TEXT
-        );
-        CREATE TABLE IF NOT EXISTS tasks (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id     INTEGER NOT NULL REFERENCES users(id),
-            title       TEXT NOT NULL,
-            description TEXT NOT NULL DEFAULT '',
-            status      TEXT NOT NULL DEFAULT 'Planned'
-                        CHECK (status IN ('Planned', 'In Progress', 'Complete')),
-            priority    TEXT NOT NULL DEFAULT 'Medium'
-                        CHECK (priority IN ('Low', 'Medium', 'High')),
-            due_date    TEXT,
-            deleted_at  TEXT,
-            created_at  TEXT NOT NULL,
-            updated_at  TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
-        """
-    )
-    # Upgrade databases created by an earlier version of the app.
-    existing = {row[1] for row in db.execute("PRAGMA table_info(tasks)")}
-    if "priority" not in existing:
-        db.execute("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'")
-    if "due_date" not in existing:
-        db.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
-    if "deleted_at" not in existing:
-        db.execute("ALTER TABLE tasks ADD COLUMN deleted_at TEXT")
-    db.commit()
-    db.close()
+    try:
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                google_id  TEXT NOT NULL UNIQUE,
+                email      TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                picture    TEXT
+            );
+            CREATE TABLE IF NOT EXISTS tasks (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(id),
+                title       TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                status      TEXT NOT NULL DEFAULT 'Planned'
+                            CHECK (status IN ('Planned', 'In Progress', 'Complete')),
+                priority    TEXT NOT NULL DEFAULT 'Medium'
+                            CHECK (priority IN ('Low', 'Medium', 'High')),
+                due_date    TEXT,
+                deleted_at  TEXT,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
+            """
+        )
+        # Upgrade databases created by an earlier version of the app.
+        existing = {row[1] for row in db.execute("PRAGMA table_info(tasks)")}
+        if "priority" not in existing:
+            db.execute("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'")
+        if "due_date" not in existing:
+            db.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
+        if "deleted_at" not in existing:
+            db.execute("ALTER TABLE tasks ADD COLUMN deleted_at TEXT")
+        db.commit()
+    finally:
+        db.close()
 
 
 init_db()
@@ -170,6 +171,9 @@ def login_required(view):
 
 
 def task_to_dict(row):
+    if not row:
+        return {}
+    keys = row.keys() if hasattr(row, "keys") else ()
     return {
         "id": row["id"],
         "title": row["title"],
@@ -178,16 +182,12 @@ def task_to_dict(row):
         "priority": row["priority"],
         "due_date": row["due_date"],
         "created_at": row["created_at"],
-        "updated_at": row["updated_at"] if "updated_at" in row.keys() else row["created_at"],
+        "updated_at": row["updated_at"] if "updated_at" in keys else row["created_at"],
     }
 
 
 def json_body():
-    """Return the JSON object in the request, or None if it is missing or not an object.
-
-    Requiring JSON also gives basic CSRF protection: browsers cannot send
-    cross-site JSON requests without a CORS preflight.
-    """
+    """Return the JSON object in the request, or None if it is missing or not an object."""
     if not request.is_json:
         return None
     data = request.get_json(silent=True)
@@ -202,8 +202,7 @@ def text_value(data, key):
 def validate_fields(data):
     """Validate whichever task fields are present in `data`.
 
-    Returns (fields, error). Only fields that were sent are returned, so the
-    same function serves both creating and (partially) updating a task.
+    Returns (fields, error). Only fields that were sent are returned.
     """
     fields = {}
     if "title" in data:
@@ -240,19 +239,23 @@ def validate_fields(data):
 
 
 def fetch_task(task_id, include_deleted=False):
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return None
     query = "SELECT * FROM tasks WHERE id = ? AND user_id = ?"
     if not include_deleted:
         query += " AND deleted_at IS NULL"
-    return get_db().execute(query, (task_id, g.user["id"])).fetchone()
+    return get_db().execute(query, (task_id, user["id"])).fetchone()
 
 
 # ---------- Pages and authentication ----------
 @app.route("/")
 @login_required
 def index():
+    user = getattr(g, "user", None) or current_user()
     return render_template(
         "index.html",
-        user=g.user,
+        user=user,
         statuses=STATUSES,
         priorities=PRIORITIES,
         title_max=TITLE_MAX,
@@ -279,7 +282,10 @@ def auth_google():
         # Helpful guidance for evaluators running without Google Cloud credentials
         return redirect(url_for("login", error="google_not_configured"))
     try:
-        return oauth.google.authorize_redirect(url_for("auth_callback", _external=True))
+        google_client = oauth.create_client("google")
+        if not google_client:
+            return redirect(url_for("login", error="oauth_error"))
+        return google_client.authorize_redirect(url_for("auth_callback", _external=True))
     except Exception:
         return redirect(url_for("login", error="oauth_error"))
 
@@ -287,7 +293,10 @@ def auth_google():
 @app.route("/auth/callback")
 def auth_callback():
     try:
-        token = oauth.google.authorize_access_token()
+        google_client = oauth.create_client("google")
+        if not google_client:
+            return redirect(url_for("login", error="1"))
+        token = google_client.authorize_access_token()
     except OAuthError:
         return redirect(url_for("login", error="1"))
 
@@ -345,9 +354,12 @@ def logout():
 @app.get("/api/tasks")
 @login_required
 def list_tasks():
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
     rows = get_db().execute(
         "SELECT * FROM tasks WHERE user_id = ? AND deleted_at IS NULL ORDER BY id DESC",
-        (g.user["id"],),
+        (user["id"],),
     ).fetchall()
     return jsonify(tasks=[task_to_dict(r) for r in rows])
 
@@ -365,16 +377,21 @@ def create_task():
     if "title" not in fields:
         return jsonify(error="Enter a task title."), 400
 
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
+
     db = get_db()
     ts = now_iso()
     cur = db.execute(
         "INSERT INTO tasks (user_id, title, description, status, priority, due_date, created_at, updated_at) "
         "VALUES (?, ?, ?, 'Planned', ?, ?, ?, ?)",
-        (g.user["id"], fields["title"], fields.get("description", ""),
+        (user["id"], fields["title"], fields.get("description", ""),
          fields.get("priority", "Medium"), fields.get("due_date"), ts, ts),
     )
     db.commit()
-    return jsonify(task=task_to_dict(fetch_task(cur.lastrowid))), 201
+    new_task = fetch_task(cur.lastrowid)
+    return jsonify(task=task_to_dict(new_task)), 201
 
 
 @app.patch("/api/tasks/<int:task_id>")
@@ -393,12 +410,15 @@ def update_task(task_id):
     if fetch_task(task_id) is None:
         return jsonify(error="Task not found."), 404
 
-    # Column names come from validate_fields (a fixed set), never from the request.
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
+
     assignments = ", ".join(f"{column} = ?" for column in fields)
     db = get_db()
     db.execute(
         f"UPDATE tasks SET {assignments}, updated_at = ? WHERE id = ? AND user_id = ?",
-        (*fields.values(), now_iso(), task_id, g.user["id"]),
+        (*fields.values(), now_iso(), task_id, user["id"]),
     )
     db.commit()
     return jsonify(task=task_to_dict(fetch_task(task_id)))
@@ -407,11 +427,13 @@ def update_task(task_id):
 @app.delete("/api/tasks/<int:task_id>")
 @login_required
 def delete_task(task_id):
-    """Soft delete: the task is hidden, and can be brought back with /restore."""
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
     db = get_db()
     cur = db.execute(
         "UPDATE tasks SET deleted_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
-        (now_iso(), task_id, g.user["id"]),
+        (now_iso(), task_id, user["id"]),
     )
     db.commit()
     if cur.rowcount == 0:
@@ -422,10 +444,13 @@ def delete_task(task_id):
 @app.post("/api/tasks/<int:task_id>/restore")
 @login_required
 def restore_task(task_id):
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
     db = get_db()
     cur = db.execute(
         "UPDATE tasks SET deleted_at = NULL WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL",
-        (task_id, g.user["id"]),
+        (task_id, user["id"]),
     )
     db.commit()
     if cur.rowcount == 0:
@@ -436,11 +461,13 @@ def restore_task(task_id):
 @app.post("/api/tasks/clear-completed")
 @login_required
 def clear_completed():
-    """Soft-delete all completed tasks for the current user."""
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
     db = get_db()
     rows = db.execute(
         "SELECT id FROM tasks WHERE user_id = ? AND status = 'Complete' AND deleted_at IS NULL",
-        (g.user["id"],)
+        (user["id"],)
     ).fetchall()
     task_ids = [r["id"] for r in rows]
     if not task_ids:
@@ -450,7 +477,7 @@ def clear_completed():
     placeholders = ",".join("?" * len(task_ids))
     db.execute(
         f"UPDATE tasks SET deleted_at = ? WHERE id IN ({placeholders}) AND user_id = ?",
-        (ts, *task_ids, g.user["id"])
+        (ts, *task_ids, user["id"])
     )
     db.commit()
     return jsonify(cleared_count=len(task_ids), task_ids=task_ids)
@@ -459,7 +486,9 @@ def clear_completed():
 @app.post("/api/tasks/restore-multiple")
 @login_required
 def restore_multiple():
-    """Restore multiple soft-deleted tasks."""
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
     data = json_body()
     task_ids = data.get("task_ids") if data else []
     if not isinstance(task_ids, list) or not task_ids:
@@ -469,7 +498,7 @@ def restore_multiple():
     placeholders = ",".join("?" * len(task_ids))
     db.execute(
         f"UPDATE tasks SET deleted_at = NULL WHERE id IN ({placeholders}) AND user_id = ?",
-        (*task_ids, g.user["id"])
+        (*task_ids, user["id"])
     )
     db.commit()
     return jsonify(ok=True, restored_count=len(task_ids))
@@ -478,12 +507,14 @@ def restore_multiple():
 @app.get("/api/tasks/export")
 @login_required
 def export_tasks():
-    """Export the current user's active tasks in CSV or JSON format."""
+    user = getattr(g, "user", None) or current_user()
+    if not user:
+        return jsonify(error="Unauthorized"), 401
     fmt = request.args.get("format", "csv").lower()
     rows = get_db().execute(
         "SELECT id, title, description, status, priority, due_date, created_at, updated_at "
         "FROM tasks WHERE user_id = ? AND deleted_at IS NULL ORDER BY id DESC",
-        (g.user["id"],),
+        (user["id"],),
     ).fetchall()
 
     if fmt == "json":
@@ -515,4 +546,5 @@ def export_tasks():
 
 
 if __name__ == "__main__":
-    app.run(debug=os.environ.get("APP_ENV") != "production", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=os.environ.get("APP_ENV") != "production")
