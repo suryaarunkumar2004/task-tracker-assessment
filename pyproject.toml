@@ -14,6 +14,9 @@ reportUnusedCallResult = false
 reportImplicitStringConcatenation = false
 reportUntypedFunctionDecorator = false
 reportArgumentType = false
+reportImplicitOverride = false
+reportUninitializedInstanceVariable = false
+reportUnannotatedClassAttribute = false
 
 [tool.pyrefly]
 python-interpreter-path = "venv/bin/python"

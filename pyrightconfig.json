@@ -19,5 +19,8 @@
   "reportUnusedCallResult": false,
   "reportImplicitStringConcatenation": false,
   "reportUntypedFunctionDecorator": false,
-  "reportArgumentType": false
+  "reportArgumentType": false,
+  "reportImplicitOverride": false,
+  "reportUninitializedInstanceVariable": false,
+  "reportUnannotatedClassAttribute": false
 }

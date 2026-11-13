@@ -1,14 +1,26 @@
+from __future__ import annotations
+
 import os
 import tempfile
 import unittest
-import json
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from flask import Flask
+    from flask.testing import FlaskClient
 
 # Ensure test database is used
 os.environ["APP_ENV"] = "testing"
 
 
 class TaskTrackerTestCase(unittest.TestCase):
-    def setUp(self):
+    db_fd: int = -1
+    db_path: str = ""
+    app_module: Any = None
+    app: Flask = None  # type: ignore[assignment]
+    client: FlaskClient = None  # type: ignore[assignment]
+
+    def setUp(self) -> None:
         self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
         os.environ["DATABASE_PATH"] = self.db_path
         
@@ -22,7 +34,7 @@ class TaskTrackerTestCase(unittest.TestCase):
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         os.close(self.db_fd)
         if os.path.exists(self.db_path):
             os.unlink(self.db_path)
@@ -164,7 +176,7 @@ class TaskTrackerTestCase(unittest.TestCase):
     def test_clear_completed_and_restore_multiple(self):
         self.login_demo("alex")
         # 1 Planned, 2 Complete
-        r1 = self.client.post("/api/tasks", json={"title": "Task 1"})
+        _ = self.client.post("/api/tasks", json={"title": "Task 1"})
         r2 = self.client.post("/api/tasks", json={"title": "Task 2"})
         r3 = self.client.post("/api/tasks", json={"title": "Task 3"})
         id2 = r2.get_json()["task"]["id"]
