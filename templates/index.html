@@ -192,6 +192,22 @@
     </section>
   </main>
 
+  <!-- Semantic Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <span class="footer-brand">Task Tracker</span>
+        <span class="footer-copy">© 2026 Graduate Support Engineer Trainee Assessment</span>
+      </div>
+      <div class="footer-links">
+        <span class="footer-badge">Python Flask · SQLite · Vanilla JS · REST APIs</span>
+        <a href="{{ url_for('export_tasks') }}" class="footer-link">Export Data (CSV)</a>
+        <a href="{{ url_for('export_tasks', format='json') }}" class="footer-link">API JSON</a>
+        <a href="mailto:support@example.com" class="footer-link">Support</a>
+      </div>
+    </div>
+  </footer>
+
   <!-- Notification & Undo Toast Container -->
   <div id="toasts" class="toasts" aria-live="polite"></div>
 

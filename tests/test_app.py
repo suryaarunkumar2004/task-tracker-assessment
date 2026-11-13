@@ -209,6 +209,182 @@ class TaskTrackerTestCase(unittest.TestCase):
         self.assertEqual(len(tasks), 1)
         self.assertEqual(tasks[0]["title"], "Export Test Task")
 
+    def test_signup_and_email_login(self):
+        signup_data = {
+            "name": "Jordan Lee",
+            "email": "jordan@example.com",
+            "password": "securepassword123",
+            "confirm_password": "securepassword123",
+            "remember_me": "on",
+        }
+        res = self.client.post("/auth/signup", data=signup_data, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Jordan Lee", res.data)
+
+        # Verify session is authenticated and remember_me flag is active
+        with self.client.session_transaction() as sess:
+            self.assertIsNotNone(sess.get("user_id"))
+            self.assertTrue(sess.permanent)
+
+        # Log out
+        self.client.post("/logout", follow_redirects=True)
+
+        # Log back in with valid email credentials
+        login_res = self.client.post(
+            "/auth/login-email",
+            data={
+                "email": "jordan@example.com",
+                "password": "securepassword123",
+                "remember_me": "on",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(login_res.status_code, 200)
+        self.assertIn(b"Jordan Lee", login_res.data)
+
+        # Attempt login with invalid password
+        self.client.post("/logout", follow_redirects=True)
+        bad_login = self.client.post(
+            "/auth/login-email",
+            data={"email": "jordan@example.com", "password": "wrongpassword"},
+            follow_redirects=True,
+        )
+        self.assertEqual(bad_login.status_code, 200)
+        self.assertIn(b"Invalid email or password", bad_login.data)
+
+    def test_signup_validation(self):
+        # Mismatched passwords
+        res1 = self.client.post(
+            "/auth/signup",
+            data={
+                "name": "Sam",
+                "email": "sam@example.com",
+                "password": "pass1234",
+                "confirm_password": "pass5678",
+            },
+            follow_redirects=True,
+        )
+        self.assertIn(b"Passwords do not match", res1.data)
+
+        # Password too short (< 6 chars)
+        res2 = self.client.post(
+            "/auth/signup",
+            data={
+                "name": "Sam",
+                "email": "sam@example.com",
+                "password": "123",
+                "confirm_password": "123",
+            },
+            follow_redirects=True,
+        )
+        self.assertIn(b"Password must be at least 6 characters", res2.data)
+
+        # Duplicate email
+        self.client.post(
+            "/auth/signup",
+            data={
+                "name": "Sam",
+                "email": "sam@example.com",
+                "password": "pass1234",
+                "confirm_password": "pass1234",
+            },
+            follow_redirects=True,
+        )
+        # Log out so the subsequent signup attempt can reach the login/signup page redirect
+        self.client.post("/logout", follow_redirects=True)
+
+        dup_res = self.client.post(
+            "/auth/signup",
+            data={
+                "name": "Sam",
+                "email": "sam@example.com",
+                "password": "pass1234",
+                "confirm_password": "pass1234",
+            },
+            follow_redirects=True,
+        )
+        self.assertIn(b"An account with this email already exists", dup_res.data)
+
+    def test_forgot_password_and_otp_reset(self):
+        # Register user
+        self.client.post(
+            "/auth/signup",
+            data={
+                "name": "Casey Morgan",
+                "email": "casey@example.com",
+                "password": "originalpass123",
+                "confirm_password": "originalpass123",
+            },
+            follow_redirects=True,
+        )
+        self.client.post("/logout", follow_redirects=True)
+
+        # Request OTP for forgot password
+        forgot_res = self.client.post(
+            "/auth/forgot-password",
+            data={"email": "casey@example.com"},
+            follow_redirects=False,
+        )
+        self.assertEqual(forgot_res.status_code, 302)
+        loc = forgot_res.headers["Location"]
+        self.assertIn("tab=reset", loc)
+        self.assertIn("casey@example.com", loc)
+        self.assertIn("demo_otp=", loc)
+
+        # Retrieve generated OTP from database
+        with self.app.app_context():
+            db = self.app_module.get_db()
+            otp_row = db.execute(
+                "SELECT otp_code FROM otps WHERE email = 'casey@example.com' AND used = 0 ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            self.assertIsNotNone(otp_row)
+            otp_code = otp_row["otp_code"]
+            self.assertEqual(len(otp_code), 6)
+
+        # Attempt reset with wrong OTP
+        bad_reset = self.client.post(
+            "/auth/reset-password",
+            data={
+                "email": "casey@example.com",
+                "otp_code": "000000",
+                "new_password": "brandnewpass999",
+                "confirm_password": "brandnewpass999",
+            },
+            follow_redirects=True,
+        )
+        self.assertIn(b"Invalid or expired OTP", bad_reset.data)
+
+        # Reset with correct OTP
+        good_reset = self.client.post(
+            "/auth/reset-password",
+            data={
+                "email": "casey@example.com",
+                "otp_code": otp_code,
+                "new_password": "brandnewpass999",
+                "confirm_password": "brandnewpass999",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(good_reset.status_code, 200)
+        self.assertIn(b"Password reset successfully", good_reset.data)
+
+        # Verify old password fails
+        fail_login = self.client.post(
+            "/auth/login-email",
+            data={"email": "casey@example.com", "password": "originalpass123"},
+            follow_redirects=True,
+        )
+        self.assertIn(b"Invalid email or password", fail_login.data)
+
+        # Verify new password succeeds
+        pass_login = self.client.post(
+            "/auth/login-email",
+            data={"email": "casey@example.com", "password": "brandnewpass999"},
+            follow_redirects=True,
+        )
+        self.assertEqual(pass_login.status_code, 200)
+        self.assertIn(b"Casey Morgan", pass_login.data)
+
 
 if __name__ == "__main__":
     unittest.main()

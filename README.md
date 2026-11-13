@@ -37,6 +37,13 @@ Beyond the baseline requirements, this implementation includes practical enhance
    - Click **Sign in with Google** to authenticate via your Google Account.
    - For rapid local evaluation without configuring Google Cloud credentials, click **Alex Johnson** or **Taylor Morgan** under *Quick Evaluator Sign-In*.
 3. **Adding a Task:**
+4. **Authentication Options:**
+   - **Google Authentication:** Sign in with one click via Google OAuth 2.0.
+   - **Email & Password Sign Up:** Create an account with name, email, password, and optional Remember Me.
+   - **Email & Password Sign In:** Log in securely with existing credentials and optional Remember Me (30-day persistent session).
+   - **Forgot Password & OTP Reset:** Enter your registered email to receive a 6-digit one-time passcode (OTP) valid for 10 minutes, enter the OTP, and set a new password.
+   - **Quick Evaluator Sign-In:** One-click demo sign-in (*Alex Johnson* or *Taylor Morgan*) for instant local evaluation without setup.
+5. **Adding a Task:**
    - Enter a **Title** (required, max 100 characters).
    - Optionally enter a **Description** (max 500 characters).
    - Select a **Priority** (*Low*, *Medium*, or *High*; defaults to *Medium*).
@@ -183,7 +190,17 @@ http://localhost:5000
 
 ## 7. Running Automated Tests
 
-A comprehensive automated test suite is included in `tests/test_app.py`, verifying API validation, authentication, state transitions, user data isolation, soft deletion, and data export.
+A comprehensive automated test suite of 13 unit and integration tests is included in `tests/test_app.py`, verifying:
+- Email/password signup, duplicate checks, and password validation
+- Email login and "Remember Me" persistent session handling
+- Forgot password 6-digit OTP generation, expiration, and password reset flow
+- Google OAuth and zero-config local evaluator demo logins
+- Task creation, title & description validation, priority, and due dates
+- Task status lifecycle transitions (*Planned* ⇄ *In Progress* ⇄ *Complete*)
+- Strict multi-tenant user data isolation (Alex cannot view, update, or delete Taylor's tasks)
+- Soft deletion with 10-second Undo recovery
+- Bulk clearing and restoring of completed tasks
+- CSV and JSON task export endpoints
 
 To run the test suite:
 ```bash
